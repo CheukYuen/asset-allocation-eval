@@ -72,6 +72,58 @@ One row per (period, layer). Aggregates across all 35 profiles:
 
 Markdown tables with the same content as result_summary.csv, split by index/product layer.
 
+## AI-invest: Two-Stage Batch Generation
+
+`AI-invest/` contains a standalone batch pipeline that calls LLMs to generate and extract asset allocation proposals for the same 35 client segments.
+
+### How it works
+
+1. **Stage 1** (`qwen3-235b-a22b-instruct-2507`): For each of the 35 clients, injects their profile (risk_level, lifecycle, allowed_asset_classes) into the system prompt template (`市场分析-提示词模板.md`) and generates a full allocation proposal in natural language.
+2. **Stage 2** (`qwen3.6-plus`): Extracts the "final recommended allocation" (CASH/BOND/EQUITY/ALT weights summing to 100) from each Stage 1 output as structured JSON.
+
+### Commands
+
+```bash
+cd AI-invest
+pip install -r requirements.txt       # openai, python-dotenv
+python3 batch_generate_allocations.py  # runs both stages, outputs to AI-invest/outputs/
+```
+
+### Key files
+
+- `AI-invest/batch_generate_allocations.py` — main script (two-stage pipeline)
+- `AI-invest/市场分析-提示词模板.md` — Stage 1 system prompt template (macro data + client profile placeholder)
+- `420/420_growth_clients_35_minimal.csv` — 35-row client input (id, lifecycle, risk_level, 420 weights)
+
+### Outputs (in `AI-invest/outputs/`)
+
+| File | Content |
+|------|---------|
+| `stage1_raw_generations*.jsonl` | 35 full LLM outputs with metadata |
+| `stage2_extracted_weights*.jsonl` | 35 extraction results with raw stage2 output |
+| `extracted_weights*.csv` | Final comparison table: original 420 weights vs AI-extracted weights |
+
+### Eligibility rules (适当性约束)
+
+Applied when building `allowed_asset_classes` per client:
+- C1: `["CASH", "BOND"]`
+- C2: `["CASH", "BOND", "ALT"]`
+- C3/C4/C5: `["CASH", "BOND", "EQUITY", "ALT"]`
+
+### Stage 2 parser robustness
+
+The `parse_weights()` function handles multiple LLM output formats:
+- Bare JSON, code-fenced JSON, JSON with surrounding text
+- Percent strings (`"70%"`), string numbers (`"70"`), 0–1 decimals (`0.7`)
+- Auto-detects ratio mode (sum ≈ 1) vs percentage mode (sum ≈ 100) and normalizes
+- Tolerance: weight_sum in `[99.5, 100.5]` → `success`
+
+### Environment
+
+Reads from `.env`:
+- `DASHSCOPE_API_KEY` (or `OPENAI_API_KEY`) — API key
+- `OPENAI_BASE_URL` — defaults to DashScope compatible endpoint
+
 ## Conventions
 
 - **Functional style**: no classes, pure functions taking/returning DataFrames
