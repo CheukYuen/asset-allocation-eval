@@ -12,6 +12,9 @@
 - **事后评估（ex-post evaluation）**：对不同引擎产出的组合进行统一适配性评估
 - **跨引擎可比性**：让目标函数不同的策略也能在同一把尺子下横向比较
 
+在此基础上，项目额外引入独立的**适当性约束层（eligibility constraint）**，用于定义不同风险等级客户的可投资资产范围。  
+该层与 `risk_anchor.csv` 并列存在，前者回答“允许买什么”，后者回答“可以承受多少风险”。
+
 ## 两层比较逻辑
 
 | 层级 | 策略 A | 策略 B | 收益数据来源 | 权重类型 |
@@ -61,6 +64,17 @@
 - 事后评估客户适配性
 - 支撑不同策略间的可比性分析
 
+### 原则 6：适当性约束独立于风险锚
+
+`eligibility_matrix.csv` 定义不同风险等级客户的可投资资产范围，属于合规硬约束，不纳入 `risk_anchor.csv`。
+
+二者分工如下：
+
+- **risk anchor**：约束“可以承受多少风险”
+- **eligibility**：约束“允许买什么资产”
+
+任何策略必须同时满足两者，才构成可行解。
+
 ## 输入文件 Schema
 
 所有输入文件位于 `data/` 目录：
@@ -82,6 +96,16 @@
 | asset_class | CASH / BOND / EQUITY / ALT |
 | product_code | 产品代码（指数层为空，产品层必填） |
 | weight | 权重，同一 `(portfolio_type, profile_id)` 下求和为 1 |
+
+补充约束：
+
+```text
+∀ (portfolio_type, profile_id, asset_class):
+    if asset_class ∉ allowed_set(risk_level):
+        weight = 0
+```
+
+即，任何策略产出的组合都必须先满足对应风险等级下的资产可投范围约束。
 
 ### asset_returns.csv
 
@@ -112,6 +136,46 @@
 | sigma_max | 风险上限（风险容器上边界） |
 | max_drawdown_tolerance | 最大回撤容忍度 |
 
+### eligibility_matrix.csv
+
+| 字段 | 说明 |
+|------|------|
+| risk_level | C1~C5 |
+| asset_class | CASH / BOND / EQUITY / ALT |
+| eligible | 是否允许投资，`1` 表示允许，`0` 表示禁止 |
+
+示例：
+
+```csv
+risk_level,asset_class,eligible
+C1,CASH,1
+C1,BOND,1
+C1,EQUITY,0
+C1,ALT,0
+C2,CASH,1
+C2,BOND,1
+C2,EQUITY,0
+C2,ALT,1
+C3,CASH,1
+C3,BOND,1
+C3,EQUITY,1
+C3,ALT,1
+C4,CASH,1
+C4,BOND,1
+C4,EQUITY,1
+C4,ALT,1
+C5,CASH,1
+C5,BOND,1
+C5,EQUITY,1
+C5,ALT,1
+```
+
+其中：
+
+- C1：只能买 CASH / BOND
+- C2：只能买 CASH / BOND / ALT
+- C3~C5：四大类资产均可投资
+
 ## 风险锚说明
 
 `risk_anchor.csv` 描述的不是“标准组合”，而是每类客户画像的**风险容器（Risk Container）**。
@@ -134,6 +198,27 @@
 - `Δσ > 0`：风险高于目标中枢
 - `Δσ < 0`：风险低于目标中枢
 - `|Δσ| 越小`：风险匹配越好
+
+需要注意的是，在适当性约束较强的客户画像上（尤其 C1 / C2），目标风险中枢可能受到可投域天花板约束而部分不可达。  
+此时 `Δσ < 0` 不一定意味着策略保守，也可能意味着组合已达到合规可行域内的风险上限。  
+因此，风险匹配评估应结合可投域信息一起解释，而不应仅凭 `Δσ` 单独下结论。
+
+## 多引擎中的注入方式
+
+`eligibility_matrix.csv` 作为**事前硬约束**注入所有策略引擎，而不是在组合生成后再做事后裁剪。
+
+- **MVO / BL**：对不可投资产直接加 `w_i = 0` 等式约束
+- **风险平价 / 目标风险**：在资产池构造阶段直接剔除禁投大类
+- **规则+优化混合 / 专家覆盖**：在规则模板层过滤掉含禁投资产的大类配置模板
+
+统一表达为：
+
+```text
+∀ asset_class ∉ allowed_set(risk_level):
+    w(asset_class) = 0
+```
+
+即，适当性约束用于收缩策略可行域，而不是调整目标函数本身。
 
 ## 输出文件
 
@@ -160,7 +245,7 @@
 | `delta_sigma` | 波动率差 | 策略 A 年化波动率 - 策略 B 年化波动率，正值表示 A 风险更高 |
 | `abs_delta_sigma` | 波动率差绝对值 | `|delta_sigma|`，用于汇总时衡量两策略的风险偏离程度 |
 
-如需做“客户适配性”评估，建议基于 `risk_anchor.csv` 衍生补充字段，例如：
+如需做“客户适配性”评估，建议基于 `risk_anchor.csv` 与 `eligibility_matrix.csv` 衍生补充字段，例如：
 
 | 字段 | 含义 |
 |------|------|
@@ -169,6 +254,11 @@
 | `breach_sigma_max` | 是否超过 `sigma_max` |
 | `breach_sigma_min` | 是否低于 `sigma_min` |
 | `breach_max_drawdown` | 是否超过最大回撤容忍度 |
+| `breach_asset_eligibility` | 是否违反资产可投范围约束 |
+| `sigma_mid_reachable` | 在当前可投域与业务约束下估计的风险中枢可达水平 |
+| `mid_unreachable_flag` | `sigma_mid` 是否高于可投域可达上限 |
+
+其中，`sigma_mid_reachable` 与 `mid_unreachable_flag` 更适合作为**诊断字段**，用于解释 C1 / C2 客户画像在合规约束下的风险中枢可达性问题，而不直接替代原始 `delta_sigma_to_mid` 指标。
 
 ### result_summary.csv
 
@@ -212,15 +302,18 @@ python main.py
 
 1. 在 `strategy_weights.csv` 中新增 `portfolio_type`（如 `new_strategy`）
 2. 补充对应的权重行（指数层填 `asset_class`，产品层填 `product_code`）
-3. 在 `main.py` 中新增 `portfolio_monthly_returns()` + `compute_all_metrics()` 调用
-4. 用 `compare_pair()` 与已有策略对比
-5. 如需纳入客户适配性评估，同步接入 `risk_anchor.csv` 的风险容器校验逻辑
+3. 如涉及客户适当性约束，确保新策略满足 `eligibility_matrix.csv` 中定义的资产可投范围
+4. 在 `main.py` 中新增 `portfolio_monthly_returns()` + `compute_all_metrics()` 调用
+5. 用 `compare_pair()` 与已有策略对比
+6. 如需纳入客户适配性评估，同步接入 `risk_anchor.csv` 与 `eligibility_matrix.csv` 的联合校验逻辑
 
 ## 体系边界与局限
 
 - 本项目以收益率、波动率、夏普、最大回撤等指标为主，对尾部风险、流动性风险、信用风险的刻画有限
 - `risk_anchor.csv` 提供的是统一风险锚，不替代收益预测、择时能力或底层研究能力
+- `eligibility_matrix.csv` 提供的是客户适当性约束，不替代具体产品准入、销售规则或监管细则的全量表达
 - `Δσ` 一类风险匹配指标依赖观察窗口长度，窗口过短时稳定性不足，应结合统一回测窗口与滚动评估机制使用
+- 在适当性约束较强的客户画像上，`sigma_mid` 可能存在部分不可达情形，评估时应结合可达性诊断字段解释
 - 本框架适用于多资产配置策略比较，不适用于高杠杆、单一资产或衍生品主导策略的完整风险刻画
 
 ## 技术栈
