@@ -23,19 +23,26 @@ pip3 install -r requirements.txt  # pandas, numpy only
 Data flows linearly: `data/*.csv → load → calc → compare → report → output/`
 
 - **main.py** — orchestrates the pipeline: load data, compute portfolio returns for each layer, calculate metrics, compare strategy pairs, save results
-- **src/load.py** — reads 5 input CSVs, validates weight sums to 1
-- **src/calc.py** — `portfolio_monthly_returns()` joins weights with returns via `asset_class` (index) or `product_code` (product); `compute_all_metrics()` computes annualized return/vol/sharpe/max drawdown per client per lookback period
-- **src/compare.py** — `compare_pair()` merges two strategies on (client_id, period), computes deltas; `summarize()` aggregates means and win rates
+- **src/load.py** — reads 6 input CSVs, validates weight sums to 1 and eligibility constraints
+- **src/calc.py** — `portfolio_monthly_returns()` joins weights with returns via `asset_class` (index) or `product_code` (product); `compute_all_metrics()` computes annualized return/vol/sharpe/max drawdown per profile per lookback period
+- **src/compare.py** — `compare_pair()` merges two strategies on (profile_id, period), computes deltas; `summarize()` aggregates means and win rates
 - **src/report.py** — saves CSVs and markdown summary to `output/`
-- **generate_mock.py** — standalone script producing all 5 input CSVs with realistic distributions
+- **generate_mock.py** — standalone script producing all 6 input CSVs with realistic distributions
 
 Key join: index layer joins on `asset_class`, product layer joins on `product_code`. The `join_col` parameter in `portfolio_monthly_returns()` controls this.
+
+## Key Domain Concepts
+
+- **profile_id**: client persona key = `{risk_level}_{life_stage}` (e.g. `C3_S2`), not a real customer ID
+- **Risk anchor (风险锚)**: per-profile risk container — `sigma_min / sigma_mid / sigma_max` computed from `σ_stage_max × m_risk` formulas; strategy-agnostic referee layer
+- **Eligibility (适当性约束)**: `eligibility_matrix.csv` defines which asset classes each risk level may invest in (C1: CASH/BOND only; C2: no EQUITY; C3–C5: all four)
+- **Δσ = annualized_vol − sigma_mid**: core risk-fit metric; smaller |Δσ| = better client fit
 
 ## Output Files Explained
 
 ### result_detail.csv / result_detail_index.csv / result_detail_product.csv
 
-Per-client, per-period comparison. Each row = one client × one lookback period. Columns include metrics for both strategies (suffixed `_3.0` / `_420_static` etc.) plus deltas:
+Per-profile, per-period comparison. Each row = one profile × one lookback period. Columns include metrics for both strategies (suffixed `_3.0` / `_420_static` etc.) plus deltas:
 
 | Metric | Definition |
 |--------|-----------|
@@ -49,17 +56,17 @@ Per-client, per-period comparison. Each row = one client × one lookback period.
 
 ### result_summary.csv
 
-One row per (period, layer). Aggregates across all 35 clients:
+One row per (period, layer). Aggregates across all 35 profiles:
 
 | Metric | Definition |
 |--------|-----------|
-| `mean_return_*` | average annualized return across clients |
-| `mean_vol_*` | average annualized volatility across clients |
-| `mean_sharpe_*` | average Sharpe ratio across clients |
+| `mean_return_*` | average annualized return across profiles |
+| `mean_vol_*` | average annualized volatility across profiles |
+| `mean_sharpe_*` | average Sharpe ratio across profiles |
 | `mean_abs_delta_sigma` | average absolute vol difference |
-| `win_rate_return` | fraction of clients where strategy A has higher return |
-| `win_rate_sharpe` | fraction of clients where strategy A has higher Sharpe |
-| `win_rate_abs_delta_sigma` | fraction of clients where strategy A has lower vol |
+| `win_rate_return` | fraction of profiles where strategy A has higher return |
+| `win_rate_sharpe` | fraction of profiles where strategy A has higher Sharpe |
+| `win_rate_abs_delta_sigma` | fraction of profiles where strategy A has lower vol |
 
 ### summary.md
 
@@ -72,4 +79,4 @@ Markdown tables with the same content as result_summary.csv, split by index/prod
 - Portfolio types: `3.0`, `420_static`, `420_online`, `3.0_mapped_product`
 - Index periods: 1y/3y/5y/10y/20y; product periods: 5y (limited by data availability)
 - Lookback uses last N months from sorted history (`monthly[-n_months:]`)
-- Adding a new strategy: add rows to `strategy_weights.csv`, then add `portfolio_monthly_returns()` + `compute_all_metrics()` + `compare_pair()` calls in main.py
+- Adding a new strategy: add rows to `strategy_weights.csv` (must satisfy eligibility), then add `portfolio_monthly_returns()` + `compute_all_metrics()` + `compare_pair()` calls in main.py

@@ -19,21 +19,16 @@ def portfolio_monthly_returns(
     """
     Compute monthly portfolio returns for all clients under a given portfolio_type.
 
-    Returns DataFrame with columns: [client_id, date, port_return]
+    Returns DataFrame with columns: [profile_id, date, port_return]
     """
-    w = weights[weights["portfolio_type"] == portfolio_type][["client_id", join_col, "weight"]]
-
-    # returns is long-form: [date, <join_col>, return]
-    # pivot returns to wide: date × join_col
-    ret_col = "return"
-    dates = sorted(returns["date"].unique())
+    w = weights[weights["portfolio_type"] == portfolio_type][["profile_id", join_col, "weight"]]
 
     merged = w.merge(returns, on=join_col, how="inner")
-    merged["weighted_return"] = merged["weight"] * merged[ret_col]
+    merged["weighted_return"] = merged["weight"] * merged["return"]
 
-    port = merged.groupby(["client_id", "date"])["weighted_return"].sum().reset_index()
+    port = merged.groupby(["profile_id", "date"])["weighted_return"].sum().reset_index()
     port.rename(columns={"weighted_return": "port_return"}, inplace=True)
-    return port.sort_values(["client_id", "date"]).reset_index(drop=True)
+    return port.sort_values(["profile_id", "date"]).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------------
@@ -78,16 +73,16 @@ def compute_all_metrics(
     periods_months: dict[str, int] | None = None,
 ) -> pd.DataFrame:
     """
-    Compute metrics for each client, optionally across multiple lookback periods.
+    Compute metrics for each client profile, optionally across multiple lookback periods.
 
-    port_returns: [client_id, date, port_return]
+    port_returns: [profile_id, date, port_return]
     periods_months: e.g. {"1y": 12, "3y": 36, ...}. If None, use full history.
     """
     if periods_months is None:
         periods_months = {"full": 0}
 
     rows = []
-    for client_id, grp in port_returns.groupby("client_id"):
+    for profile_id, grp in port_returns.groupby("profile_id"):
         grp = grp.sort_values("date")
         monthly = grp["port_return"].values
         total_months = len(monthly)
@@ -101,7 +96,7 @@ def compute_all_metrics(
                 subset = monthly[-n_months:]
 
             m = compute_metrics(subset)
-            m["client_id"] = client_id
+            m["profile_id"] = profile_id
             m["period"] = period_name
             rows.append(m)
 

@@ -14,6 +14,44 @@ RISK_LEVELS = ["C1", "C2", "C3", "C4", "C5"]
 LIFE_STAGES = [f"S{i}" for i in range(1, 8)]
 ASSET_CLASSES = ["CASH", "BOND", "EQUITY", "ALT"]
 
+# 生命周期波动率上限（参考 glide path 方法论）
+SIGMA_STAGE_MAX = {
+    "S1": 0.16,  # 刚毕业
+    "S2": 0.15,  # 单身青年
+    "S3": 0.14,  # 二人世界
+    "S4": 0.14,  # 小孩学前
+    "S5": 0.13,  # 小孩成年前
+    "S6": 0.12,  # 子女成年
+    "S7": 0.08,  # 退休
+}
+
+# 风险等级乘数
+M_RISK = {
+    "C1": 0.45,  # 保守型
+    "C2": 0.60,  # 稳健型
+    "C3": 0.75,  # 平衡型
+    "C4": 0.90,  # 进取型
+    "C5": 1.00,  # 激进型
+}
+
+# 最大回撤容忍度（仅由风险等级决定）
+MAX_DD = {
+    "C1": -0.05,
+    "C2": -0.10,
+    "C3": -0.15,
+    "C4": -0.20,
+    "C5": -0.25,
+}
+
+# 适当性约束：每个风险等级可投资的资产类别
+ELIGIBLE_ASSETS = {
+    "C1": {"CASH", "BOND"},
+    "C2": {"CASH", "BOND", "ALT"},
+    "C3": {"CASH", "BOND", "EQUITY", "ALT"},
+    "C4": {"CASH", "BOND", "EQUITY", "ALT"},
+    "C5": {"CASH", "BOND", "EQUITY", "ALT"},
+}
+
 # Products per asset class
 PRODUCTS = {
     "CASH": ["MMF_001"],
@@ -40,7 +78,7 @@ def gen_client_profiles() -> pd.DataFrame:
     for r in RISK_LEVELS:
         for s in LIFE_STAGES:
             rows.append({
-                "client_id": f"{r}_{s}",
+                "profile_id": f"{r}_{s}",
                 "risk_level": r,
                 "life_stage": s,
             })
@@ -50,82 +88,115 @@ def gen_client_profiles() -> pd.DataFrame:
     return df
 
 
-# ── 2. strategy_weights.csv ───────────────────────────────────────────────
-def _random_weights(n: int) -> np.ndarray:
-    """Generate n random weights that sum to 1."""
-    w = np.random.dirichlet(np.ones(n))
-    return w
+# ── 2. eligibility_matrix.csv ────────────────────────────────────────────
+def gen_eligibility_matrix() -> pd.DataFrame:
+    rows = []
+    for r in RISK_LEVELS:
+        for ac in ASSET_CLASSES:
+            rows.append({
+                "risk_level": r,
+                "asset_class": ac,
+                "eligible": 1 if ac in ELIGIBLE_ASSETS[r] else 0,
+            })
+    df = pd.DataFrame(rows)
+    df.to_csv(DATA_DIR / "eligibility_matrix.csv", index=False)
+    print(f"eligibility_matrix.csv: {len(df)} rows")
+    return df
 
 
+# ── 3. strategy_weights.csv ──────────────────────────────────────────────
 def _risk_tilt(risk_level: str) -> dict[str, float]:
-    """Return target allocation tilts based on risk level."""
+    """Return target allocation tilts based on risk level, respecting eligibility."""
+    eligible = ELIGIBLE_ASSETS[risk_level]
     idx = RISK_LEVELS.index(risk_level)
-    # Higher risk -> more equity, less cash
-    equity_base = 0.10 + idx * 0.15  # 0.10 .. 0.70
-    cash_base = 0.40 - idx * 0.08    # 0.40 .. 0.08
-    bond_base = 0.35 - idx * 0.05    # 0.35 .. 0.15
-    alt_base = 1.0 - equity_base - cash_base - bond_base
-    return {"CASH": cash_base, "BOND": bond_base, "EQUITY": equity_base, "ALT": alt_base}
+
+    # Base tilts (before eligibility filtering)
+    raw = {
+        "CASH":   0.40 - idx * 0.08,   # 0.40 .. 0.08
+        "BOND":   0.35 - idx * 0.05,   # 0.35 .. 0.15
+        "EQUITY": 0.10 + idx * 0.15,   # 0.10 .. 0.70
+        "ALT":    0.15,                 # residual
+    }
+
+    # Zero out ineligible assets, redistribute to eligible ones
+    filtered = {ac: (v if ac in eligible else 0.0) for ac, v in raw.items()}
+    total = sum(filtered.values())
+    if total == 0:
+        # Fallback: equal weight among eligible
+        for ac in eligible:
+            filtered[ac] = 1.0 / len(eligible)
+    else:
+        filtered = {ac: v / total for ac, v in filtered.items()}
+
+    return filtered
 
 
 def gen_strategy_weights(clients: pd.DataFrame) -> pd.DataFrame:
     rows = []
 
     for _, c in clients.iterrows():
-        cid = c["client_id"]
-        tilt = _risk_tilt(c["risk_level"])
+        pid = c["profile_id"]
+        risk = c["risk_level"]
+        eligible = ELIGIBLE_ASSETS[risk]
+        tilt = _risk_tilt(risk)
 
         # ── Index layer: 3.0 ──
-        noise_30 = {k: max(0.01, v + np.random.uniform(-0.03, 0.03)) for k, v in tilt.items()}
+        noise_30 = {k: max(0.01, v + np.random.uniform(-0.03, 0.03)) if v > 0 else 0.0
+                     for k, v in tilt.items()}
         total = sum(noise_30.values())
         for ac in ASSET_CLASSES:
             rows.append({
                 "portfolio_type": "3.0",
-                "client_id": cid,
+                "profile_id": pid,
                 "asset_class": ac,
                 "product_code": "",
-                "weight": round(noise_30[ac] / total, 6),
+                "weight": round(noise_30[ac] / total, 6) if total > 0 else 0.0,
             })
 
         # ── Index layer: 420_static ──
-        noise_420 = {k: max(0.01, v + np.random.uniform(-0.05, 0.05)) for k, v in tilt.items()}
+        noise_420 = {k: max(0.01, v + np.random.uniform(-0.05, 0.05)) if v > 0 else 0.0
+                      for k, v in tilt.items()}
         total = sum(noise_420.values())
         for ac in ASSET_CLASSES:
             rows.append({
                 "portfolio_type": "420_static",
-                "client_id": cid,
+                "profile_id": pid,
                 "asset_class": ac,
                 "product_code": "",
-                "weight": round(noise_420[ac] / total, 6),
+                "weight": round(noise_420[ac] / total, 6) if total > 0 else 0.0,
             })
 
         # ── Product layer: 420_online ──
-        prod_weights_420 = _gen_product_weights(tilt, jitter=0.05)
+        prod_weights_420 = _gen_product_weights(tilt, eligible, jitter=0.05)
         for ac, prods in prod_weights_420.items():
             for pc, w in prods.items():
                 rows.append({
                     "portfolio_type": "420_online",
-                    "client_id": cid,
+                    "profile_id": pid,
                     "asset_class": ac,
                     "product_code": pc,
                     "weight": w,
                 })
 
         # ── Product layer: 3.0_mapped_product ──
-        prod_weights_30 = _gen_product_weights(tilt, jitter=0.03)
+        prod_weights_30 = _gen_product_weights(tilt, eligible, jitter=0.03)
         for ac, prods in prod_weights_30.items():
             for pc, w in prods.items():
                 rows.append({
                     "portfolio_type": "3.0_mapped_product",
-                    "client_id": cid,
+                    "profile_id": pid,
                     "asset_class": ac,
                     "product_code": pc,
                     "weight": w,
                 })
 
     df = pd.DataFrame(rows)
-    # Fix rounding: normalize weights per (portfolio_type, client_id)
-    for (pt, cid), grp in df.groupby(["portfolio_type", "client_id"]):
+
+    # Remove zero-weight rows (ineligible assets)
+    df = df[df["weight"] > 0].copy()
+
+    # Fix rounding: normalize weights per (portfolio_type, profile_id)
+    for (pt, pid), grp in df.groupby(["portfolio_type", "profile_id"]):
         total = grp["weight"].sum()
         df.loc[grp.index, "weight"] = grp["weight"] / total
 
@@ -135,11 +206,15 @@ def gen_strategy_weights(clients: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _gen_product_weights(tilt: dict, jitter: float) -> dict[str, dict[str, float]]:
+def _gen_product_weights(
+    tilt: dict, eligible: set, jitter: float,
+) -> dict[str, dict[str, float]]:
     result = {}
     all_weights = []
 
     for ac in ASSET_CLASSES:
+        if ac not in eligible or tilt[ac] == 0:
+            continue
         prods = PRODUCTS[ac]
         base = max(0.01, tilt[ac] + np.random.uniform(-jitter, jitter))
         if len(prods) == 1:
@@ -158,7 +233,7 @@ def _gen_product_weights(tilt: dict, jitter: float) -> dict[str, dict[str, float
     return result
 
 
-# ── 3. asset_returns.csv ──────────────────────────────────────────────────
+# ── 4. asset_returns.csv ──────────────────────────────────────────────────
 def gen_asset_returns() -> pd.DataFrame:
     dates = pd.date_range("2006-01-31", periods=INDEX_MONTHS, freq="ME")
     rows = []
@@ -180,7 +255,7 @@ def gen_asset_returns() -> pd.DataFrame:
     return df
 
 
-# ── 4. product_returns.csv ────────────────────────────────────────────────
+# ── 5. product_returns.csv ────────────────────────────────────────────────
 def gen_product_returns() -> pd.DataFrame:
     dates = pd.date_range("2021-01-31", periods=PRODUCT_MONTHS, freq="ME")
     rows = []
@@ -207,16 +282,33 @@ def gen_product_returns() -> pd.DataFrame:
     return df
 
 
-# ── 5. risk_anchor.csv ───────────────────────────────────────────────────
+# ── 6. risk_anchor.csv ───────────────────────────────────────────────────
 def gen_risk_anchor(clients: pd.DataFrame) -> pd.DataFrame:
+    """
+    风险锚体系：
+        σ_cap = σ_stage_max × m_risk
+        σ_mid = 0.8 × σ_cap
+        σ_min = 0.6 × σ_cap
+    """
     rows = []
     for _, c in clients.iterrows():
-        idx = RISK_LEVELS.index(c["risk_level"])
+        risk = c["risk_level"]
+        stage = c["life_stage"]
+        sigma_stage_max = SIGMA_STAGE_MAX[stage]
+        m_risk = M_RISK[risk]
+
+        sigma_cap = sigma_stage_max * m_risk
+        sigma_mid = 0.8 * sigma_cap
+        sigma_min = 0.6 * sigma_cap
+
         rows.append({
-            "client_id": c["client_id"],
-            "risk_level": c["risk_level"],
-            "target_vol": round(0.03 + idx * 0.03, 4),  # 3% .. 15%
-            "max_drawdown_tolerance": round(-0.05 - idx * 0.05, 4),  # -5% .. -25%
+            "profile_id": c["profile_id"],
+            "risk_level": risk,
+            "life_stage": stage,
+            "sigma_min": round(sigma_min, 6),
+            "sigma_mid": round(sigma_mid, 6),
+            "sigma_max": round(sigma_cap, 6),
+            "max_drawdown_tolerance": MAX_DD[risk],
         })
     df = pd.DataFrame(rows)
     df.to_csv(DATA_DIR / "risk_anchor.csv", index=False)
@@ -228,6 +320,7 @@ def gen_risk_anchor(clients: pd.DataFrame) -> pd.DataFrame:
 if __name__ == "__main__":
     print("Generating mock data...\n")
     clients = gen_client_profiles()
+    gen_eligibility_matrix()
     gen_strategy_weights(clients)
     gen_asset_returns()
     gen_product_returns()

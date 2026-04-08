@@ -7,7 +7,7 @@ Usage:
 """
 
 import pandas as pd
-from src.load import load_all, validate_weights
+from src.load import load_all, validate_weights, validate_eligibility
 from src.calc import portfolio_monthly_returns, compute_all_metrics
 from src.compare import compare_pair, summarize
 from src.report import save_csv, generate_markdown, save_markdown
@@ -34,9 +34,11 @@ def run():
     weights = data["strategy_weights"]
     asset_ret = data["asset_returns"]
     product_ret = data["product_returns"]
+    eligibility = data["eligibility_matrix"]
 
     validate_weights(weights)
-    print("Weights validated.\n")
+    validate_eligibility(weights, eligibility)
+    print("Weights validated (sum & eligibility).\n")
 
     # ── Index Layer: 3.0 vs 420_static ─────────────────────────────────────
     print("=== Index Layer ===")

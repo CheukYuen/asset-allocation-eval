@@ -11,12 +11,12 @@ def compare_pair(
     label_b: str,
 ) -> pd.DataFrame:
     """
-    Merge metrics for two strategies on (client_id, period) and compute deltas.
+    Merge metrics for two strategies on (profile_id, period) and compute deltas.
     Returns detail DataFrame with per-client comparison.
     """
     merged = metrics_a.merge(
         metrics_b,
-        on=["client_id", "period"],
+        on=["profile_id", "period"],
         suffixes=(f"_{label_a}", f"_{label_b}"),
     )
 

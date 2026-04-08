@@ -1,4 +1,4 @@
-client_id,risk_level,life_stage
+profile_id,risk_level,life_stage
 C1_S1,C1,S1
 C1_S2,C1,S2
 C1_S3,C1,S3
