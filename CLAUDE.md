@@ -13,9 +13,11 @@ Both layers use buy-and-hold (static weights, no rebalancing) across 35 client s
 ## Commands
 
 ```bash
-python3 generate_mock.py   # generate mock data into data/ (idempotent, seed 42)
-python3 main.py            # run full evaluation, outputs to output/
-pip3 install -r requirements.txt  # pandas, numpy only
+python3 build_asset_returns.py     # build data/asset_returns.csv from 建模月频序列.csv (Total Return口径)
+python3 build_strategy_weights.py  # replace 3.0 weights in data/strategy_weights.csv with real weights from 420/
+python3 generate_mock.py           # generate mock data into data/ (idempotent, seed 42) — WARNING: overwrites real data
+python3 main.py                    # run full evaluation, outputs to output/
+pip3 install -r requirements.txt   # pandas, numpy only
 ```
 
 ## Architecture
@@ -27,7 +29,9 @@ Data flows linearly: `data/*.csv → load → calc → compare → report → ou
 - **src/calc.py** — `portfolio_monthly_returns()` joins weights with returns via `asset_class` (index) or `product_code` (product); `compute_all_metrics()` computes annualized return/vol/sharpe/max drawdown per profile per lookback period
 - **src/compare.py** — `compare_pair()` merges two strategies on (profile_id, period), computes deltas; `summarize()` aggregates means and win rates
 - **src/report.py** — saves CSVs and markdown summary to `output/`
-- **generate_mock.py** — standalone script producing all 6 input CSVs with realistic distributions
+- **build_asset_returns.py** — builds `data/asset_returns.csv` (wide format: month, CASH, BOND, EQUITY, ALT) from `data/建模月频序列.csv`; `src/load.py` melts it to long format on load
+- **build_strategy_weights.py** — replaces the `3.0` portion of `data/strategy_weights.csv` with real weights from `420/420_growth_clients_35_minimal.csv` (maps lifecycle→S1–S7, risk_level→C1–C5, commodity→ALT)
+- **generate_mock.py** — standalone script producing all 6 input CSVs with realistic distributions (WARNING: overwrites real data)
 
 Key join: index layer joins on `asset_class`, product layer joins on `product_code`. The `join_col` parameter in `portfolio_monthly_returns()` controls this.
 
@@ -37,6 +41,19 @@ Key join: index layer joins on `asset_class`, product layer joins on `product_co
 - **Risk anchor (风险锚)**: per-profile risk container — `sigma_min / sigma_mid / sigma_max` computed from `σ_stage_max × m_risk` formulas; strategy-agnostic referee layer
 - **Eligibility (适当性约束)**: `eligibility_matrix.csv` defines which asset classes each risk level may invest in (C1: CASH/BOND only; C2: no EQUITY; C3–C5: all four)
 - **Δσ = annualized_vol − sigma_mid**: core risk-fit metric; smaller |Δσ| = better client fit
+
+## Data Provenance (Index Layer)
+
+| 数据 | 来源 | 状态 |
+|------|------|------|
+| asset_returns.csv | `data/建模月频序列.csv` → `build_asset_returns.py` | ✅ 真实数据 |
+| 3.0 权重 (strategy_weights.csv) | `420/420_growth_clients_35_minimal.csv` → `build_strategy_weights.py` | ✅ 真实数据 |
+| 420_static 权重 (strategy_weights.csv) | — | ❌ 仍为 mock，待替换 |
+
+Asset return口径 (Total Return):
+- CASH: `CBA02201`, BOND: `CBOND_NEW_COMPOSITE_WEALTH`, EQUITY: `CSI300_TR`
+- ALT: `70% × AU9999 + 30% × NHCI`
+- 月收益率: `P_t / P_{t-1} - 1`
 
 ## Output Files Explained
 
@@ -93,7 +110,7 @@ python3 batch_generate_allocations.py  # runs both stages, outputs to AI-invest/
 
 - `AI-invest/batch_generate_allocations.py` — main script (two-stage pipeline)
 - `AI-invest/市场分析-提示词模板.md` — Stage 1 system prompt template (macro data + client profile placeholder)
-- `420/420_growth_clients_35_minimal.csv` — 35-row client input (id, lifecycle, risk_level, 420 weights)
+- `420/420_growth_clients_35_minimal.csv` — 35-row real 3.0 weights (id, lifecycle, risk_level, cash_pct/bond_pct/equity_pct/commodity_pct)
 
 ### Outputs (in `AI-invest/outputs/`)
 
