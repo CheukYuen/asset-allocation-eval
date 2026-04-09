@@ -76,7 +76,8 @@ Per-profile, per-period comparison. Each row = one profile × one lookback perio
 | `max_drawdown` | largest peak-to-trough decline in cumulative return series |
 | `delta_return` | strategy A return minus strategy B return |
 | `delta_sigma` | strategy A vol minus strategy B vol (positive = A is riskier) |
-| `abs_delta_sigma` | absolute value of delta_sigma |
+| `abs_delta_sigma_3.0` | `\|vol_3.0 − σ_mid\|` — 3.0 策略波动率与客户风险中枢的偏差 |
+| `abs_delta_sigma_420_static` | `\|vol_420 − σ_mid\|` — 420_static 策略波动率与客户风险中枢的偏差 |
 
 ### result_summary_index.csv
 
@@ -87,10 +88,13 @@ One row per period. Aggregates across all 35 profiles:
 | `mean_return_*` | average annualized return across profiles |
 | `mean_vol_*` | average annualized volatility across profiles |
 | `mean_sharpe_*` | average Sharpe ratio across profiles |
-| `mean_abs_delta_sigma` | average absolute vol difference |
 | `win_rate_return` | fraction of profiles where strategy A has higher return |
 | `win_rate_sharpe` | fraction of profiles where strategy A has higher Sharpe |
-| `win_rate_abs_delta_sigma` | fraction of profiles where strategy A has lower vol |
+| `win_rate_abs_delta_sigma` | 3.0 风险匹配优于 420_static 的画像占比（逐画像比较 `\|vol − σ_mid\|`，更小者胜） |
+| `mean_abs_delta_sigma_3.0` | 3.0 的平均风险偏差 mean(`\|vol_3.0 − σ_mid\|`)，越小越匹配客户 |
+| `mean_abs_delta_sigma_420_static` | 420_static 的平均风险偏差 mean(`\|vol_420 − σ_mid\|`)，越小越匹配客户 |
+
+> **风险匹配度说明**：σ_mid 来自风险锚体系（docs/风险锚体系.md），是每个客户画像（risk_level × life_stage）的风险中枢目标波动率。`|Δσ| = |vol − σ_mid|` 是核心适配性指标——不是波动越低越好，而是越接近 σ_mid 越好。`win_rate` 看广度（多少画像 3.0 更匹配），`mean_abs_delta_sigma_*` 看深度（平均偏了多远）。
 
 ### summary_index.md
 

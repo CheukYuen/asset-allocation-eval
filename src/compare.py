@@ -29,7 +29,7 @@ def compare_pair(
     merged["delta_vol"] = merged[va] - merged[vb]
     merged["delta_sharpe"] = merged[sa] - merged[sb]
     merged["delta_sigma"] = merged[va] - merged[vb]  # same as delta_vol
-    merged["abs_delta_sigma"] = merged["delta_sigma"].abs()
+
 
     # Risk-fit: |vol - σ_mid| per strategy (Δσ from 风险锚体系)
     if risk_anchor is not None:
@@ -64,7 +64,6 @@ def summarize(detail: pd.DataFrame, label_a: str, label_b: str) -> pd.DataFrame:
             f"mean_vol_{label_b}": grp[vb].mean(),
             f"mean_sharpe_{label_a}": grp[sa].mean(),
             f"mean_sharpe_{label_b}": grp[sb].mean(),
-            "mean_abs_delta_sigma": grp["abs_delta_sigma"].mean(),
             "win_rate_return": (grp["delta_return"] > 0).mean(),
             "win_rate_sharpe": (grp["delta_sharpe"] > 0).mean(),
         }
