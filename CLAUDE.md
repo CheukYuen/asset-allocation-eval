@@ -15,8 +15,10 @@ Both layers use buy-and-hold (static weights, no rebalancing) across 35 client s
 ```bash
 python3 build_asset_returns.py     # build data/asset_returns.csv from 建模月频序列.csv (Total Return口径)
 python3 build_strategy_weights.py  # replace 3.0 weights in data/strategy_weights.csv with real weights from 420/
+python3 build_ai_strategy_weights.py  # build 3.0 (AI weights) + 420_static into strategy_weights.csv
+python3 run_index_comparison.py    # index layer only: 3.0 vs 420_static → output/index_3.0_vs_420/
 python3 generate_mock.py           # generate mock data into data/ (idempotent, seed 42) — WARNING: overwrites real data
-python3 main.py                    # run full evaluation, outputs to output/
+python3 main.py                    # run full evaluation (both layers), outputs to output/
 pip3 install -r requirements.txt   # pandas, numpy only
 ```
 
@@ -31,6 +33,8 @@ Data flows linearly: `data/*.csv → load → calc → compare → report → ou
 - **src/report.py** — saves CSVs and markdown summary to `output/`
 - **build_asset_returns.py** — builds `data/asset_returns.csv` (wide format: month, CASH, BOND, EQUITY, ALT) from `data/建模月频序列.csv`; `src/load.py` melts it to long format on load
 - **build_strategy_weights.py** — replaces the `3.0` portion of `data/strategy_weights.csv` with real weights from `420/420_growth_clients_35_minimal.csv` (maps lifecycle→S1–S7, risk_level→C1–C5, commodity→ALT)
+- **build_ai_strategy_weights.py** — builds `3.0` (AI-extracted weights from `AI-invest/outputs/extracted_weights_v3.csv`) + `420_static` (original 420 weights) into `data/strategy_weights.csv`; normalizes weights to sum=1, handles failed extractions
+- **run_index_comparison.py** — runs index layer comparison only (3.0 vs 420_static), outputs to `output/index_3.0_vs_420/`
 - **generate_mock.py** — standalone script producing all 6 input CSVs with realistic distributions (WARNING: overwrites real data)
 
 Key join: index layer joins on `asset_class`, product layer joins on `product_code`. The `join_col` parameter in `portfolio_monthly_returns()` controls this.
@@ -57,7 +61,10 @@ Asset return口径 (Total Return):
 
 ## Output Files Explained
 
-### result_detail.csv / result_detail_index.csv / result_detail_product.csv
+Comparison results are organized by layer under `output/`:
+- `output/index_3.0_vs_420/` — index layer: 3.0 (AI) vs 420_static
+
+### result_detail_index.csv
 
 Per-profile, per-period comparison. Each row = one profile × one lookback period. Columns include metrics for both strategies (suffixed `_3.0` / `_420_static` etc.) plus deltas:
 
@@ -71,9 +78,9 @@ Per-profile, per-period comparison. Each row = one profile × one lookback perio
 | `delta_sigma` | strategy A vol minus strategy B vol (positive = A is riskier) |
 | `abs_delta_sigma` | absolute value of delta_sigma |
 
-### result_summary.csv
+### result_summary_index.csv
 
-One row per (period, layer). Aggregates across all 35 profiles:
+One row per period. Aggregates across all 35 profiles:
 
 | Metric | Definition |
 |--------|-----------|
@@ -85,9 +92,9 @@ One row per (period, layer). Aggregates across all 35 profiles:
 | `win_rate_sharpe` | fraction of profiles where strategy A has higher Sharpe |
 | `win_rate_abs_delta_sigma` | fraction of profiles where strategy A has lower vol |
 
-### summary.md
+### summary_index.md
 
-Markdown tables with the same content as result_summary.csv, split by index/product layer.
+Markdown table with the same content as result_summary_index.csv.
 
 ## AI-invest: Two-Stage Batch Generation
 

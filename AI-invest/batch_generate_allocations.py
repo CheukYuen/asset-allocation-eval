@@ -288,7 +288,7 @@ def run():
     print(f"Loaded {len(clients)} clients, template hash={template_hash}")
 
     # --- Stage 1 ---
-    stage1_path = os.path.join(OUTPUT_DIR, "stage1_raw_generations_v2.jsonl")
+    stage1_path = os.path.join(OUTPUT_DIR, "stage1_raw_generations_v3.jsonl")
     stage1_results = []
 
     print("\n=== Stage 1: Generating allocation proposals ===")
@@ -333,7 +333,7 @@ def run():
     print(f"\nStage 1 saved to {stage1_path}")
 
     # --- Stage 2 ---
-    stage2_path = os.path.join(OUTPUT_DIR, "stage2_extracted_weights_v2.jsonl")
+    stage2_path = os.path.join(OUTPUT_DIR, "stage2_extracted_weights_v3.jsonl")
     stage2_results = []
 
     print("\n=== Stage 2: Extracting weights ===")
@@ -379,7 +379,7 @@ def run():
     print(f"\nStage 2 saved to {stage2_path}")
 
     # --- Final CSV ---
-    csv_path = os.path.join(OUTPUT_DIR, "extracted_weights_v2.csv")
+    csv_path = os.path.join(OUTPUT_DIR, "extracted_weights_v3.csv")
     fieldnames = ["id", "lifecycle", "risk_level", "cash_pct", "bond_pct",
                   "equity_pct", "commodity_pct", "CASH", "BOND", "EQUITY", "ALT",
                   "weight_sum", "parse_status"]
