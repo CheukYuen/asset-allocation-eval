@@ -64,41 +64,49 @@ Asset return口径 (Total Return):
 Comparison results are organized by layer under `output/`:
 - `output/index_3.0_vs_420/` — index layer: 3.0 (AI) vs 420_static
 
+Output follows a **正文主表 + 胜率表**两层结构:
+
 ### result_detail_index.csv
 
-Per-profile, per-period comparison. Each row = one profile × one lookback period. Columns include metrics for both strategies (suffixed `_3.0` / `_420_static` etc.) plus deltas:
+Per-profile, per-period comparison. Each row = one profile × one lookback period. Columns include metrics for both strategies (suffixed `_3.0` / `_420_static` etc.) plus deltas and risk-anchor columns:
 
 | Metric | Definition |
 |--------|-----------|
 | `annualized_return` | `prod(1+r)^(12/n) - 1` — compounded monthly returns annualized |
 | `annualized_vol` | `std(monthly, ddof=1) × √12` — annualized standard deviation |
 | `sharpe_ratio` | `(ann_return - 0.02) / ann_vol` — risk-free rate hardcoded at 2% |
-| `max_drawdown` | largest peak-to-trough decline in cumulative return series |
+| `max_drawdown` | largest peak-to-trough decline in cumulative return series (negative value) |
 | `delta_return` | strategy A return minus strategy B return |
 | `delta_sigma` | strategy A vol minus strategy B vol (positive = A is riskier) |
 | `abs_delta_sigma_3.0` | `\|vol_3.0 − σ_mid\|` — 3.0 策略波动率与客户风险中枢的偏差 |
 | `abs_delta_sigma_420_static` | `\|vol_420 − σ_mid\|` — 420_static 策略波动率与客户风险中枢的偏差 |
+| `sigma_mid` | 该画像的风险中枢目标波动率（来自 risk_anchor.csv） |
+| `max_drawdown_tolerance` | 该画像的最大回撤红线（来自 risk_anchor.csv，负值） |
 
-### result_summary_index.csv
+### result_main_index.csv（正文主表）
 
-One row per period. Aggregates across all 35 profiles:
+One row per period. Shows absolute performance levels across all 35 profiles:
 
 | Metric | Definition |
 |--------|-----------|
 | `mean_return_*` | average annualized return across profiles |
-| `mean_vol_*` | average annualized volatility across profiles |
 | `mean_sharpe_*` | average Sharpe ratio across profiles |
-| `win_rate_return` | fraction of profiles where strategy A has higher return |
-| `win_rate_sharpe` | fraction of profiles where strategy A has higher Sharpe |
-| `win_rate_abs_delta_sigma` | 3.0 风险匹配优于 420_static 的画像占比（逐画像比较 `\|vol − σ_mid\|`，更小者胜） |
-| `mean_abs_delta_sigma_3.0` | 3.0 的平均风险偏差 mean(`\|vol_3.0 − σ_mid\|`)，越小越匹配客户 |
-| `mean_abs_delta_sigma_420_static` | 420_static 的平均风险偏差 mean(`\|vol_420 − σ_mid\|`)，越小越匹配客户 |
+| `mean_abs_delta_sigma_*` | 平均风险偏差 mean(`\|vol − σ_mid\|`)，越小越匹配客户 |
+| `exceed_rate_maxdd_*` | 超回撤红线画像占比 — `actual_mdd < max_drawdown_tolerance` 的画像比例 |
 
-> **风险匹配度说明**：σ_mid 来自风险锚体系（docs/风险锚体系.md），是每个客户画像（risk_level × life_stage）的风险中枢目标波动率。`|Δσ| = |vol − σ_mid|` 是核心适配性指标——不是波动越低越好，而是越接近 σ_mid 越好。`win_rate` 看广度（多少画像 3.0 更匹配），`mean_abs_delta_sigma_*` 看深度（平均偏了多远）。
+### result_winrate_index.csv（胜率表）
+
+One row per period. Shows how broadly strategy A (3.0) beats strategy B (420_static):
+
+| Metric | Definition |
+|--------|-----------|
+| `win_rate_return` | fraction of profiles where 3.0 has higher return |
+| `win_rate_sharpe` | fraction of profiles where 3.0 has higher Sharpe |
+| `win_rate_risk_match` | 3.0 风险匹配更优的画像占比（逐画像比较 `\|vol − σ_mid\|`，更小者胜） |
 
 ### summary_index.md
 
-Markdown table with the same content as result_summary_index.csv.
+Markdown with both tables (正文主表 + 胜率表).
 
 ## AI-invest: Two-Stage Batch Generation
 
