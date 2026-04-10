@@ -55,19 +55,25 @@ def run():
     metrics_420 = compute_all_metrics(port_420, INDEX_PERIODS)
 
     detail = compare_pair(metrics_30, metrics_420, "3.0", "420_static", risk_anchor)
-    summary = summarize(detail, "3.0", "420_static")
+    main_table, win_table = summarize(detail, "3.0", "420_static")
 
     # Output
     _save_csv(detail, "result_detail_index.csv")
-    _save_csv(summary, "result_summary_index.csv")
+    _save_csv(main_table, "result_main_index.csv")
+    _save_csv(win_table, "result_winrate_index.csv")
 
     # Markdown
     md = "# Index Layer: 3.0 vs 420_static\n\n"
-    md += _df_to_md(summary)
+    md += "## 正文主表\n\n"
+    md += _df_to_md(main_table)
+    md += "\n\n## 胜率表\n\n"
+    md += _df_to_md(win_table)
     _save_md(md, "summary_index.md")
 
-    print("\nSummary:")
-    print(summary.to_string(index=False))
+    print("\n正文主表:")
+    print(main_table.to_string(index=False))
+    print("\n胜率表:")
+    print(win_table.to_string(index=False))
     print(f"\nDone. Check {OUTPUT_DIR}/")
 
 

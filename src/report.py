@@ -16,8 +16,10 @@ def save_csv(df: pd.DataFrame, name: str) -> Path:
 
 
 def generate_markdown(
-    summary_index: pd.DataFrame,
-    summary_product: pd.DataFrame,
+    main_idx: pd.DataFrame,
+    winrate_idx: pd.DataFrame,
+    main_prd: pd.DataFrame,
+    winrate_prd: pd.DataFrame,
     label_a_idx: str,
     label_b_idx: str,
     label_a_prd: str,
@@ -26,11 +28,17 @@ def generate_markdown(
     lines = ["# Asset Allocation Eval — Summary Report\n"]
 
     lines.append("## Index Layer: {} vs {}\n".format(label_a_idx, label_b_idx))
-    lines.append(_df_to_md(summary_index))
+    lines.append("### 正文主表\n")
+    lines.append(_df_to_md(main_idx))
+    lines.append("\n### 胜率表\n")
+    lines.append(_df_to_md(winrate_idx))
     lines.append("")
 
     lines.append("## Product Layer: {} vs {}\n".format(label_a_prd, label_b_prd))
-    lines.append(_df_to_md(summary_product))
+    lines.append("### 正文主表\n")
+    lines.append(_df_to_md(main_prd))
+    lines.append("\n### 胜率表\n")
+    lines.append(_df_to_md(winrate_prd))
     lines.append("")
 
     return "\n".join(lines)

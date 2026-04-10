@@ -49,7 +49,7 @@ def run():
     metrics_420s = compute_all_metrics(port_420s, INDEX_PERIODS)
 
     detail_idx = compare_pair(metrics_30_idx, metrics_420s, "3.0", "420_static")
-    summary_idx = summarize(detail_idx, "3.0", "420_static")
+    main_idx, winrate_idx = summarize(detail_idx, "3.0", "420_static")
 
     print("Index layer metrics computed.")
 
@@ -62,7 +62,7 @@ def run():
     metrics_420o = compute_all_metrics(port_420o, PRODUCT_PERIODS)
 
     detail_prd = compare_pair(metrics_30_prd, metrics_420o, "3.0_mapped", "420_online")
-    summary_prd = summarize(detail_prd, "3.0_mapped", "420_online")
+    main_prd, winrate_prd = summarize(detail_prd, "3.0_mapped", "420_online")
 
     print("Product layer metrics computed.\n")
 
@@ -70,21 +70,14 @@ def run():
     print("Saving results...")
     save_csv(detail_idx, "result_detail_index.csv")
     save_csv(detail_prd, "result_detail_product.csv")
-
-    all_detail = pd.concat([
-        detail_idx.assign(layer="index"),
-        detail_prd.assign(layer="product"),
-    ], ignore_index=True)
-    save_csv(all_detail, "result_detail.csv")
-
-    all_summary = pd.concat([
-        summary_idx.assign(layer="index"),
-        summary_prd.assign(layer="product"),
-    ], ignore_index=True)
-    save_csv(all_summary, "result_summary.csv")
+    save_csv(main_idx, "result_main_index.csv")
+    save_csv(winrate_idx, "result_winrate_index.csv")
+    save_csv(main_prd, "result_main_product.csv")
+    save_csv(winrate_prd, "result_winrate_product.csv")
 
     md = generate_markdown(
-        summary_idx, summary_prd,
+        main_idx, winrate_idx,
+        main_prd, winrate_prd,
         "3.0", "420_static",
         "3.0_mapped", "420_online",
     )
