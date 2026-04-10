@@ -1,0 +1,26 @@
+{
+    "data": {
+      "prdName": "南方现金增利货币A",
+      "totalNum": 7258,
+      "list": [
+        {
+          "date": "20260408",
+          "avgreturnDay": "0.00",
+          "navAccumulated": "1.0000",
+          "navAdjusted": "1.8531",
+          "navUnit": "1.0000",
+          "sevenIncomeRate": 0
+        },
+        {
+          "date": "20260407",
+          "avgreturnDay": "0.00",
+          "navAccumulated": "1.0000",
+          "navAdjusted": "1.8531",
+          "navUnit": "1.0000",
+          "sevenIncomeRate": 0
+        }
+      ]
+    },
+    "responseCode": "000000",
+    "responseMsg": "成功"
+  }
