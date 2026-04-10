@@ -7,7 +7,7 @@ Usage:
 """
 
 import pandas as pd
-from src.load import load_all, validate_weights, validate_eligibility
+from src.load import load_all, validate_weights, validate_eligibility, load_rf_series
 from src.calc import portfolio_monthly_returns, compute_all_metrics
 from src.compare import compare_pair, summarize
 from src.report import save_csv, generate_markdown, save_markdown
@@ -35,6 +35,7 @@ def run():
     asset_ret = data["asset_returns"]
     product_ret = data["product_returns"]
     eligibility = data["eligibility_matrix"]
+    rf_series = load_rf_series()
 
     validate_weights(weights)
     validate_eligibility(weights, eligibility)
@@ -45,8 +46,8 @@ def run():
     port_30_idx = portfolio_monthly_returns(weights, asset_ret, "3.0", "asset_class")
     port_420s = portfolio_monthly_returns(weights, asset_ret, "420_static", "asset_class")
 
-    metrics_30_idx = compute_all_metrics(port_30_idx, INDEX_PERIODS)
-    metrics_420s = compute_all_metrics(port_420s, INDEX_PERIODS)
+    metrics_30_idx = compute_all_metrics(port_30_idx, INDEX_PERIODS, rf_series)
+    metrics_420s = compute_all_metrics(port_420s, INDEX_PERIODS, rf_series)
 
     detail_idx = compare_pair(metrics_30_idx, metrics_420s, "3.0", "420_static")
     main_idx, winrate_idx = summarize(detail_idx, "3.0", "420_static")
@@ -58,8 +59,8 @@ def run():
     port_30_prd = portfolio_monthly_returns(weights, product_ret, "3.0_mapped_product", "product_code")
     port_420o = portfolio_monthly_returns(weights, product_ret, "420_online", "product_code")
 
-    metrics_30_prd = compute_all_metrics(port_30_prd, PRODUCT_PERIODS)
-    metrics_420o = compute_all_metrics(port_420o, PRODUCT_PERIODS)
+    metrics_30_prd = compute_all_metrics(port_30_prd, PRODUCT_PERIODS, rf_series)
+    metrics_420o = compute_all_metrics(port_420o, PRODUCT_PERIODS, rf_series)
 
     detail_prd = compare_pair(metrics_30_prd, metrics_420o, "3.0_mapped", "420_online")
     main_prd, winrate_prd = summarize(detail_prd, "3.0_mapped", "420_online")

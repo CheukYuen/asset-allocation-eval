@@ -34,6 +34,20 @@ def _melt_product_returns(df: pd.DataFrame) -> pd.DataFrame:
     return long.reset_index(drop=True)
 
 
+def load_rf_series() -> pd.Series:
+    """Load CGB_1Y from data/rf_series.csv as a month-end-date-indexed Series.
+
+    Values are annual rates in % (e.g. 2.32 means 2.32%).
+    Built by build_asset_returns.py. Forward-fills any within-series gaps.
+    Caller must handle leading NaNs (raises via _align_rf).
+    """
+    df = load_csv("rf_series.csv")
+    df["date"] = pd.to_datetime(df["month"]) + pd.offsets.MonthEnd(0)
+    df = df.sort_values("date").drop(columns="month")
+    df["CGB_1Y"] = df["CGB_1Y"].ffill()
+    return df.set_index("date")["CGB_1Y"]
+
+
 def load_all() -> dict[str, pd.DataFrame]:
     names = [
         "client_profiles.csv",

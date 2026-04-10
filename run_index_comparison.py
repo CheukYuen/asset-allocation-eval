@@ -2,7 +2,7 @@
 
 import pandas as pd
 from pathlib import Path
-from src.load import load_csv, _melt_asset_returns, validate_weights, validate_eligibility
+from src.load import load_csv, _melt_asset_returns, validate_weights, validate_eligibility, load_rf_series
 from src.calc import portfolio_monthly_returns, compute_all_metrics
 from src.compare import compare_pair, summarize
 from src.report import _df_to_md
@@ -38,6 +38,7 @@ def run():
     asset_ret = _melt_asset_returns(load_csv("asset_returns.csv"))
     eligibility = load_csv("eligibility_matrix.csv")
     risk_anchor = load_csv("risk_anchor.csv")
+    rf_series = load_rf_series()
 
     # Only validate index-layer strategies
     idx_weights = weights[weights["portfolio_type"].isin(["3.0", "420_static"])].copy()
@@ -51,8 +52,8 @@ def run():
     port_30 = portfolio_monthly_returns(idx_weights, asset_ret, "3.0", "asset_class")
     port_420 = portfolio_monthly_returns(idx_weights, asset_ret, "420_static", "asset_class")
 
-    metrics_30 = compute_all_metrics(port_30, INDEX_PERIODS)
-    metrics_420 = compute_all_metrics(port_420, INDEX_PERIODS)
+    metrics_30 = compute_all_metrics(port_30, INDEX_PERIODS, rf_series)
+    metrics_420 = compute_all_metrics(port_420, INDEX_PERIODS, rf_series)
 
     detail = compare_pair(metrics_30, metrics_420, "3.0", "420_static", risk_anchor)
     main_table, win_table = summarize(detail, "3.0", "420_static")

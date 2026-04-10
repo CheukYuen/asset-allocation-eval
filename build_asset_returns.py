@@ -43,9 +43,16 @@ result = result.dropna(subset=["CASH", "BOND", "EQUITY", "ALT"], how="all")
 for col in ["CASH", "BOND", "EQUITY", "ALT"]:
     result[col] = result[col].round(8)
 
-# Also extract latest risk-free rate
+# Also extract latest risk-free rate (informational)
 rf_row = raw[["month", "CGB_1Y"]].dropna(subset=["CGB_1Y"]).iloc[-1]
 print(f"Latest rf (CGB_1Y): {rf_row['CGB_1Y']}% as of {rf_row['month']}")
+
+# Save CGB_1Y series for dynamic Sharpe rf
+rf_series = raw[["month", "CGB_1Y"]].copy()
+rf_series["CGB_1Y"] = rf_series["CGB_1Y"].ffill()
+rf_out = DATA_DIR / "rf_series.csv"
+rf_series.to_csv(rf_out, index=False)
+print(f"Saved rf_series.csv ({rf_series['CGB_1Y'].notna().sum()} rows) to {rf_out}")
 
 # Save
 out_path = DATA_DIR / "asset_returns.csv"

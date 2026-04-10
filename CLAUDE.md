@@ -13,7 +13,7 @@ Both layers use buy-and-hold (static weights, no rebalancing) across 35 client s
 ## Commands
 
 ```bash
-python3 build_asset_returns.py     # build data/asset_returns.csv from 建模月频序列.csv (Total Return口径)
+python3 build_asset_returns.py     # build data/asset_returns.csv + data/rf_series.csv from 建模月频序列.csv
 python3 build_strategy_weights.py  # replace 3.0 weights in data/strategy_weights.csv with real weights from 420/
 python3 build_ai_strategy_weights.py  # build 3.0 (AI weights) + 420_static into strategy_weights.csv
 python3 run_index_comparison.py    # index layer only: 3.0 vs 420_static → output/index_3.0_vs_420/
@@ -27,11 +27,11 @@ pip3 install -r requirements.txt   # pandas, numpy only
 Data flows linearly: `data/*.csv → load → calc → compare → report → output/`
 
 - **main.py** — orchestrates the pipeline: load data, compute portfolio returns for each layer, calculate metrics, compare strategy pairs, save results
-- **src/load.py** — reads 6 input CSVs, validates weight sums to 1 and eligibility constraints
-- **src/calc.py** — `portfolio_monthly_returns()` joins weights with returns via `asset_class` (both index and product layers); `compute_all_metrics()` computes annualized return/vol/sharpe/max drawdown per profile per lookback period
+- **src/load.py** — reads input CSVs, validates weight sums to 1 and eligibility constraints; `load_rf_series()` loads `data/rf_series.csv` as a date-indexed CGB_1Y Series for dynamic Sharpe
+- **src/calc.py** — `portfolio_monthly_returns()` joins weights with returns via `asset_class`; `compute_all_metrics()` computes annualized return/vol/sharpe/max drawdown per profile per lookback period; accepts optional `rf_series` for dynamic Sharpe (see below)
 - **src/compare.py** — `compare_pair()` merges two strategies on (profile_id, period), computes deltas; `summarize()` aggregates means and win rates
 - **src/report.py** — saves CSVs and markdown summary to `output/`
-- **build_asset_returns.py** — builds `data/asset_returns.csv` (wide format: month, CASH, BOND, EQUITY, ALT) from `data/建模月频序列.csv`; `src/load.py` melts it to long format on load
+- **build_asset_returns.py** — builds `data/asset_returns.csv` (wide format: month, CASH, BOND, EQUITY, ALT) and `data/rf_series.csv` (month, CGB_1Y) from `data/建模月频序列.csv`; `src/load.py` melts asset_returns to long format on load
 - **build_strategy_weights.py** — replaces the `3.0` portion of `data/strategy_weights.csv` with real weights from `420/420_growth_clients_35_minimal.csv` (maps lifecycle→S1–S7, risk_level→C1–C5, commodity→ALT)
 - **build_ai_strategy_weights.py** — builds `3.0` (AI-extracted weights from `AI-invest/outputs/extracted_weights_v3.csv`) + `420_static` (original 420 weights) into `data/strategy_weights.csv`; normalizes weights to sum=1, handles failed extractions
 - **run_index_comparison.py** — runs index layer comparison only (3.0 vs 420_static), outputs to `output/index_3.0_vs_420/`
@@ -51,6 +51,7 @@ Key join: both layers join on `asset_class`. `product_returns.csv` is wide forma
 | 数据 | 来源 | 状态 |
 |------|------|------|
 | asset_returns.csv | `data/建模月频序列.csv` → `build_asset_returns.py` | ✅ 真实数据 |
+| rf_series.csv | `data/建模月频序列.csv` → `build_asset_returns.py`（CGB_1Y列，ffill） | ✅ 真实数据 |
 | 3.0 权重 (strategy_weights.csv) | `420/420_growth_clients_35_minimal.csv` → `build_strategy_weights.py` | ✅ 真实数据 |
 | 420_static 权重 (strategy_weights.csv) | — | ❌ 仍为 mock，待替换 |
 
@@ -74,7 +75,7 @@ Per-profile, per-period comparison. Each row = one profile × one lookback perio
 |--------|-----------|
 | `annualized_return` | `prod(1+r)^(12/n) - 1` — compounded monthly returns annualized |
 | `annualized_vol` | `std(monthly, ddof=1) × √12` — annualized standard deviation |
-| `sharpe_ratio` | `(ann_return - 0.02) / ann_vol` — risk-free rate hardcoded at 2% |
+| `sharpe_ratio` | `mean(R_p - rf_t) / std(R_p - rf_t, ddof=1) × √12` — 逐月超额收益法；rf_t 来自 CGB_1Y 动态序列，`(1 + CGB_1Y_t/100)^(1/12) - 1` |
 | `max_drawdown` | largest peak-to-trough decline in cumulative return series (negative value) |
 | `delta_return` | strategy A return minus strategy B return |
 | `delta_sigma` | strategy A vol minus strategy B vol (positive = A is riskier) |
@@ -168,3 +169,4 @@ Reads from `.env`:
 - Index periods: 1y/3y/5y/10y/20y; product periods: 5y (limited by data availability)
 - Lookback uses last N months from sorted history (`monthly[-n_months:]`)
 - Adding a new strategy: add rows to `strategy_weights.csv` (must satisfy eligibility), then add `portfolio_monthly_returns()` + `compute_all_metrics()` + `compare_pair()` calls in main.py
+- **Sharpe rf 口径**: 动态 CGB_1Y（`data/rf_series.csv`），逐月超额收益法；`compute_all_metrics()` 必须传入 `rf_series=load_rf_series()`，禁止固定常数 rf
