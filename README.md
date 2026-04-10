@@ -291,15 +291,29 @@ C5,ALT,1
 ## 快速开始
 
 ```bash
-# 安装依赖
-pip install -r requirements.txt
+# 创建虚拟环境（推荐安装到项目内，避免污染全局 Python）
+python3 -m venv .venv
+.venv/bin/python -m pip install -U pip
+
+# 安装 / 更新依赖
+.venv/bin/python -m pip install -r requirements.txt
 
 # 生成 mock 数据
-python generate_mock.py
+.venv/bin/python generate_mock.py
 
 # 运行评估
-python main.py
+.venv/bin/python main.py
 ```
+
+## 生成对比图（指数层）
+
+在已生成 `output/index_3.0_vs_420/result_main_index.csv` 与 `result_winrate_index.csv` 后运行：
+
+```bash
+.venv/bin/python generate_charts.py
+```
+
+输出目录：`output/index_3.0_vs_420/charts/`
 
 ## 回测周期
 

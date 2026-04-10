@@ -10,6 +10,16 @@ Offline evaluation framework comparing smart portfolio strategies (智能投顾 
 
 Both layers use buy-and-hold (static weights, no rebalancing) across 35 client segments (C1–C5 × S1–S7).
 
+## Environment Setup
+
+```bash
+python3 -m venv .venv                              # create project-local venv (already in .gitignore)
+.venv/bin/python -m pip install -U pip              # upgrade pip
+.venv/bin/python -m pip install -r requirements.txt # pandas, numpy, matplotlib
+```
+
+All commands below assume `.venv/bin/python` (or activate the venv first).
+
 ## Commands
 
 ```bash
@@ -17,9 +27,9 @@ python3 build_asset_returns.py     # build data/asset_returns.csv + data/rf_seri
 python3 build_strategy_weights.py  # replace 3.0 weights in data/strategy_weights.csv with real weights from 420/
 python3 build_ai_strategy_weights.py  # build 3.0 (AI weights) + 420_static into strategy_weights.csv
 python3 run_index_comparison.py    # index layer only: 3.0 vs 420_static → output/index_3.0_vs_420/
+python3 generate_charts.py        # generate 6 comparison charts → output/index_3.0_vs_420/charts/
 python3 generate_mock.py           # generate mock data into data/ (idempotent, seed 42) — WARNING: overwrites real data
 python3 main.py                    # run full evaluation (both layers), outputs to output/
-pip3 install -r requirements.txt   # pandas, numpy only
 ```
 
 ## Architecture
@@ -35,6 +45,7 @@ Data flows linearly: `data/*.csv → load → calc → compare → report → ou
 - **build_strategy_weights.py** — replaces the `3.0` portion of `data/strategy_weights.csv` with real weights from `420/420_growth_clients_35_minimal.csv` (maps lifecycle→S1–S7, risk_level→C1–C5, commodity→ALT)
 - **build_ai_strategy_weights.py** — builds `3.0` (AI-extracted weights from `AI-invest/outputs/extracted_weights_v3.csv`) + `420_static` (original 420 weights) into `data/strategy_weights.csv`; normalizes weights to sum=1, handles failed extractions
 - **run_index_comparison.py** — runs index layer comparison only (3.0 vs 420_static), outputs to `output/index_3.0_vs_420/`
+- **generate_charts.py** — generates 6 comparison charts (return, sharpe, |Δσ|, maxdd, winrate, summary scorecard) from `result_main_index.csv` + `result_winrate_index.csv` → `output/index_3.0_vs_420/charts/`
 - **generate_mock.py** — standalone script producing all 6 input CSVs with realistic distributions (WARNING: overwrites real data)
 
 Key join: both layers join on `asset_class`. `product_returns.csv` is wide format (date, CASH, BOND, EQUITY, ALT) with values averaged across products per asset class per month; `src/load.py` melts it to long format on load.
@@ -164,7 +175,7 @@ Reads from `.env`:
 ## Conventions
 
 - **Functional style**: no classes, pure functions taking/returning DataFrames
-- **Minimal deps**: pandas + numpy only; matplotlib only if plotting added later
+- **Deps**: pandas, numpy, matplotlib (see `requirements.txt`); project uses `.venv/` for isolation
 - Portfolio types: `3.0`, `420_static`, `420_online`, `3.0_mapped_product`
 - Index periods: 1y/3y/5y/10y/20y; product periods: 5y (limited by data availability)
 - Lookback uses last N months from sorted history (`monthly[-n_months:]`)

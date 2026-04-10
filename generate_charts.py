@@ -282,7 +282,7 @@ def chart6_summary(main, wr):
                     symbol, ha="center", va="center", fontsize=9,
                     color=sym_color, fontweight="bold")
 
-    ax.set_title("图6  管理层摘要  ▲=3.0 胜  ▼=420 胜", fontsize=13,
+    ax.set_title("图6  结论摘要  ▲=3.0 胜  ▼=420 胜", fontsize=13,
                  fontweight="bold", pad=12)
     for spine in ax.spines.values():
         spine.set_visible(False)
